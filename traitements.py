@@ -8,7 +8,11 @@ import pyspark
 from pyspark.sql import SQLContext
 from pyspark import sql
 
+from pyspark.sql.types import Row
+
+
 import re
+from pyspark.sql import functions as sf 
 from pyspark.sql.functions import udf
 from pyspark.sql.types import *
 import unicodedata
@@ -39,7 +43,7 @@ conf = {
     'mapred.bq.temp.gcs.path': input_directory,
     'mapred.bq.input.project.id': 'channel-cloud',
     'mapred.bq.input.dataset.id': 'Media_Dashboard_Test_DMP_Fr',
-    'mapred.bq.input.table.id': 'test_1777079149',
+    'mapred.bq.input.table.id': 'GA',
 }
 
 # Output Parameters.
@@ -48,24 +52,59 @@ output_table = 'table_raw_for_kpi_calcul'
 
 ############## I. Read / import data ##############
 ##### I.A Load GA data in from BigQuery : 
-table_data = sc.newAPIHadoopRDD('com.google.cloud.hadoop.io.bigquery.JsonTextBigQueryInputFormat',
+df_ga = sc.newAPIHadoopRDD('com.google.cloud.hadoop.io.bigquery.JsonTextBigQueryInputFormat',
     'org.apache.hadoop.io.LongWritable',
     'com.google.gson.JsonObject',
     conf=conf)
 
-print(type(table_data))
-table_data = table_data.toDF(['ind', "state"])
-table_data.show(5) # Display 10 results.
+#### I.A.1 Treat rdd format ####
+# get the schema of the rdd 
+# def f(x):
+#     d = {}
+#     for i in range(len(x)):
+#         d[str(i)] = x[i]
+#     return d
+# df_ga = df_ga.map(lambda x: Row(**f(x))).toDF()
+df_ga = df_ga.toDF()
+df_ga.select('_2').show(truncate=False)
+# schema = StructType([StructField(str(i), StringType(), True) for i in range(32)])
+
+# df = sqlContext.createDataFrame(rdd, schema)
+
+
+# Rename columns name
+# for coo in df_ga.columns : 
+#     df_ga.coo = 
+
+###############################
+
+print(type(df_ga))
+df_ga.show(10) # Display 10 results.
 
 ##### I.B Load : 
 df_sizmek = sqlContext.read.csv("gs://cloud-composer-bucket-testing/fatImport1.csv", header="true", sep = ",")
-df_sizmek = df_sizmek.select([coo for coo in df_sizmek.columns if coo in df_sizmek.columns[:80]])
+
+###################################################
+
+############## II. Data preparation  ##############
+##### II.A concat the two columns on GA table  :
+df_ga = df_ga.withColumn('id_unique', sf.concat(sf.col('fullVisitorId'),sf.lit('_'), sf.col('visitId')))
+df_ga.select(['fullVisitorId', 'visitId', 'id_unique']).show(5)
+
+##### II.B select first 80 columns on sizmek table :
+df_sizmek = df_sizmek.select([coo for coo in df_sizmek.columns if coo in df_sizmek.columns[:100]])
 print(df_sizmek.dtypes)
 print(len(df_sizmek.columns))
 print(type(df_sizmek))
 df_sizmek.show(5)
-###################################################
 
+##### II.C Join sizmek and GA : 
+df_global = df_ga.join(df_sizmek, on = [df_sizmek.QueryString_0_0 == df_ga.ClientID], how = 'inner') #TODO check the how 
+nb_lignes_ga = df_ga.count()
+nb_lignes_sizmek = df_sizmek.count()
+nb_lignes_global = df_global.count()
+print("Nb lignes ga : {} ; nb lignes Sizmek {} ; nb lignes global : {}".format(nb_lignes_ga, nb_lignes_sizmek, nb_lignes_global))
+df_global.show(5)
 ################# FUNCTIONS #################
 
 
