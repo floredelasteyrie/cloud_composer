@@ -111,6 +111,7 @@ df_sizmek = df_sizmek.withColumn("gaID", udfGAID("QueryString_0_0")) # on extrai
 df_sizmek = df_sizmek.filter(df_sizmek.gaID != "n/a") # on garde seulement les lignes avec gaID bien defini -> lorsque non defini ils mettent n/a
 
 df_enriched = df_sizmek.join(df_campaign_info, df_sizmek.WinningEventEntityID == df_campaign_info["Ad ID"], "left_outer")
+df_enriched.show()
 ###################################################
 
 ############# Import data for SEA Ranking and impression 
@@ -118,5 +119,25 @@ from pyspark.sql.types import StringType, IntegerType, DateType
 from datetime import datetime
 stringtodate =  udf (lambda x: datetime.strptime(x, '%d/%m/%Y'), TimestampType())
 df_sea = sqlContext.read.csv("gs://cloud-composer-bucket-testing/data_SEA_programmatic.csv", header=True, sep = ";")
-df_sea = df_sea.select(stringtodate(col("Day")).alias("day") ,col("Impressions").cast(IntegerType()).alias("impressions"),col("Avg_position").cast(IntegerType()).alias("avg_position"),col("Search_Exact_match_IS").cast(IntegerType()).alias("EMIS"), col("Clicks").cast(IntegerType()).alias("clicks"))
+df_sea = df_sea.select(stringtodate(col("Day")).alias("day_sea") ,
+    col("Impressions").cast(FloatType()).alias("impressions_sea"),
+    col("Avg_position").cast(FloatType()).alias("avg_position_sea"),
+    col("Search_Exact_match_IS").cast(FloatType()).alias("EMIS_sea"), 
+    col("Clicks").cast(FloatType()).alias("clicks_sea"))
+df_sea.show()
+###################################################
+
+############# Import data for social 
+from pyspark.sql.types import StringType, IntegerType, DateType
+from datetime import datetime
+stringtodate =  udf (lambda x: datetime.strptime(x, '%d/%m/%Y'), TimestampType())
+df_social = sqlContext.read.csv("gs://cloud-composer-bucket-testing/data_social.csv", header=True, sep = ";")
+
+df_social = df_social.select(col("Reach").cast(FloatType()).alias("reach_social"), 
+    col("Impressions").cast(FloatType()).alias("impressions_social"),
+    col("Frequency").cast(FloatType()).alias("frequency_social"),
+    col("Clics sur un lien").cast(FloatType()).alias("clicks_social"),
+    stringtodate(col("Reporting Starts")).alias("reporting_start_social"),
+    stringtodate(col("Reporting Ends")).alias("reporting_end_social"))
+df_social.show()
 ###################################################
