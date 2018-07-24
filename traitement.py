@@ -66,22 +66,7 @@ def find_gaID(QueryString):
 
 ############# 1. Import GA table from Big Query 
 
-conf = {
-    # Input Parameters.
-    'mapred.bq.project.id': project,
-    'mapred.bq.gcs.bucket': bucket,
-    'mapred.bq.temp.gcs.path': input_directory,
-    'mapred.bq.input.project.id': 'channel-cloud',
-    'mapred.bq.input.dataset.id': 'Media_Dashboard_Test_DMP_Fr',
-    'mapred.bq.input.table.id': '01_tableRaw_limit_NA',
-}
 
-# Load data in from BigQuery.
-table_data = sc.newAPIHadoopRDD(
-    'com.google.cloud.hadoop.io.bigquery.JsonTextBigQueryInputFormat',
-    'org.apache.hadoop.io.LongWritable',
-    'com.google.gson.JsonObject',
-    conf=conf)
 #############
 
 ############# 2. Import Sizmek table from Google Cloud Storage 
@@ -113,7 +98,7 @@ df_sizmek = df_sizmek.withColumn("gaID", udfGAID("QueryString_0_0")) # on extrai
 df_sizmek = df_sizmek.filter(df_sizmek.gaID != "n/a") # on garde seulement les lignes avec gaID bien defini -> lorsque non defini ils mettent n/a
 
 df_enriched = df_sizmek.join(df_campaign_info, df_sizmek.WinningEventEntityID == df_campaign_info["Ad ID"], "left_outer")
-df_enriched.show()
+#df_enriched.show(10)
 #############
 
 ############# 3. Import data for SEA Ranking and impression 
@@ -126,7 +111,7 @@ df_sea = df_sea.select(stringtodate(col("Day")).alias("day_sea") ,
     col("Avg_position").cast(FloatType()).alias("avg_position_sea"),
     col("Search_Exact_match_IS").cast(FloatType()).alias("EMIS_sea"), 
     col("Clicks").cast(FloatType()).alias("clicks_sea"))
-df_sea.show()
+#df_sea.show(10)
 #############
 
 ############# 4.  Import data for social 
@@ -141,7 +126,7 @@ df_social = df_social.select(col("Reach").cast(FloatType()).alias("reach_social"
     col("Clics sur un lien").cast(FloatType()).alias("clicks_social"),
     stringtodate(col("Reporting Starts")).alias("reporting_start_social"),
     stringtodate(col("Reporting Ends")).alias("reporting_end_social"))
-df_social.show()
+#df_social.show(10)
 ###############
 ###################################################
 
@@ -151,6 +136,19 @@ df_social.show()
 ############### 1. GA 
 
 
+################## II. Data prep ##################
+
+######### 1. 
+
+conf = {
+    # Input Parameters.
+    'mapred.bq.project.id': project,
+    'mapred.bq.gcs.bucket': bucket,
+    'mapred.bq.temp.gcs.path': input_directory,
+    'mapred.bq.input.project.id': 'channel-cloud',
+    'mapred.bq.input.dataset.id': 'Media_Dashboard_Test_DMP_Fr',
+    'mapred.bq.input.table.id': '01_tableRaw_limit_NA',
+}
 
 # Load data in from BigQuery.
 ga_clo = sc.newAPIHadoopRDD(
@@ -159,9 +157,10 @@ ga_clo = sc.newAPIHadoopRDD(
     'com.google.gson.JsonObject',
     conf=conf)
 
-################## II. Data prep ##################
 
-######### 1. 
+
+print(ga_clo.take(2)) # print + .take() pour voir contenu rdd
+
 def transform(row):
     out_dict = {}
     # convert string to dict 
@@ -191,6 +190,27 @@ def transform(row):
     return Row(**out_dict)
 
 
-mapping = table_data.map(transform)
+mapping = ga_clo.map(transform)
 df_ga = mapping.toDF()
-ga_reduced = df_ga.show(10) #.show() pour dataframe !
+
+
+# for coo in df_ga.columns :
+#     print(coo)
+#     df_ga[coo] = df_ga[coo].fillna("na", axis=0)
+
+df_ga.printSchema()
+
+##########################################
+
+################## Jointure ##################
+df_global = df_ga.join(df_sizmek, on = [df_sizmek.QueryString_0_0 == df_ga.cookie_ID_ga], how= 'full')
+df_matche = df_ga.join(df_sizmek, on = [df_sizmek.QueryString_0_0 == df_ga.cookie_ID_ga], how= 'inner')
+print("####### df_global")
+df_global.show()
+print(df_matche.count()) # TODO chequer le nombre de matcher 
+df_global.groupBy("channel").agg({"channel" : 'count'}).show()
+##########################################
+
+
+
+
