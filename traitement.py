@@ -62,7 +62,9 @@ def find_gaID(QueryString):
 
 
 ################# I. LOADING DATA #################
-############# Import GA table from Big Query #########
+
+
+############# 1. Import GA table from Big Query 
 
 conf = {
     # Input Parameters.
@@ -71,7 +73,7 @@ conf = {
     'mapred.bq.temp.gcs.path': input_directory,
     'mapred.bq.input.project.id': 'channel-cloud',
     'mapred.bq.input.dataset.id': 'Media_Dashboard_Test_DMP_Fr',
-    'mapred.bq.input.table.id': '00_tableRaw_limit',
+    'mapred.bq.input.table.id': '01_tableRaw_limit_NA',
 }
 
 # Load data in from BigQuery.
@@ -80,9 +82,9 @@ table_data = sc.newAPIHadoopRDD(
     'org.apache.hadoop.io.LongWritable',
     'com.google.gson.JsonObject',
     conf=conf)
-###################################################
+#############
 
-############# Import Sizmek table from Google Cloud Storage #########
+############# 2. Import Sizmek table from Google Cloud Storage 
 # On lit de rapport global de Sizmek depuis GCS -> fichier qui contient les informations des placementName et stratData que l'on va pouvoir recuperer
 # en recoupant avec l'adID.
 
@@ -112,9 +114,9 @@ df_sizmek = df_sizmek.filter(df_sizmek.gaID != "n/a") # on garde seulement les l
 
 df_enriched = df_sizmek.join(df_campaign_info, df_sizmek.WinningEventEntityID == df_campaign_info["Ad ID"], "left_outer")
 df_enriched.show()
-###################################################
+#############
 
-############# Import data for SEA Ranking and impression 
+############# 3. Import data for SEA Ranking and impression 
 from pyspark.sql.types import StringType, IntegerType, DateType
 from datetime import datetime
 stringtodate =  udf (lambda x: datetime.strptime(x, '%d/%m/%Y'), TimestampType())
@@ -125,9 +127,9 @@ df_sea = df_sea.select(stringtodate(col("Day")).alias("day_sea") ,
     col("Search_Exact_match_IS").cast(FloatType()).alias("EMIS_sea"), 
     col("Clicks").cast(FloatType()).alias("clicks_sea"))
 df_sea.show()
-###################################################
+#############
 
-############# Import data for social 
+############# 4.  Import data for social 
 from pyspark.sql.types import StringType, IntegerType, DateType
 from datetime import datetime
 stringtodate =  udf (lambda x: datetime.strptime(x, '%d/%m/%Y'), TimestampType())
@@ -140,4 +142,55 @@ df_social = df_social.select(col("Reach").cast(FloatType()).alias("reach_social"
     stringtodate(col("Reporting Starts")).alias("reporting_start_social"),
     stringtodate(col("Reporting Ends")).alias("reporting_end_social"))
 df_social.show()
+###############
 ###################################################
+
+
+################## II. Data prep ##################
+
+############### 1. GA 
+
+
+
+# Load data in from BigQuery.
+ga_clo = sc.newAPIHadoopRDD(
+    'com.google.cloud.hadoop.io.bigquery.JsonTextBigQueryInputFormat',
+    'org.apache.hadoop.io.LongWritable',
+    'com.google.gson.JsonObject',
+    conf=conf)
+
+################## II. Data prep ##################
+
+######### 1. 
+def transform(row):
+    out_dict = {}
+    # convert string to dict 
+    row_list = eval(row[1])
+    out_dict['date'] = row_list["date"]
+    out_dict["visitStartTime"] = row_list["visitStartTime"]
+    out_dict["time"] = row_list["time"]
+    out_dict['fullVisitorId'] = row_list["fullVisitorId"]
+    out_dict['visitId'] = row_list["visitId"]
+    out_dict['concat_visitId_fullVisitor'] = row_list["visitId"]+'_'+row_list["fullVisitorId"]
+    out_dict['category'] = row_list["category"]
+    out_dict['division'] = row_list["division"]
+    out_dict['locale'] = row_list["locale"]
+    out_dict['cookie_ID_ga'] = row_list["cookie_ID_ga"]
+    out_dict['channel'] = row_list["channel"]
+    out_dict['campaign'] = row_list["campaign"]
+    out_dict['campaign_id'] = row_list["campaign_id"]
+    out_dict['event_cat'] = row_list["event_cat"]
+    out_dict['event_act'] = row_list["event_act"]
+    out_dict['event_lab'] = row_list["event_lab"]
+    out_dict['bounce'] = row_list["bounce"]
+    out_dict['sessions'] = row_list["sessions"]
+    out_dict['pv'] = row_list["pv"]
+    out_dict['transaction_id'] = row_list["transaction_id"]
+    out_dict['transaction_item_id'] = row_list["transaction_item_id"]
+
+    return Row(**out_dict)
+
+
+mapping = table_data.map(transform)
+df_ga = mapping.toDF()
+ga_reduced = df_ga.show(10) #.show() pour dataframe !
