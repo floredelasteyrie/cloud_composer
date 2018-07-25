@@ -141,3 +141,60 @@ df_social = df_social.select(col("Reach").cast(FloatType()).alias("reach_social"
     stringtodate(col("Reporting Ends")).alias("reporting_end_social"))
 df_social.show()
 ###################################################
+
+
+
+####### 1. Perimetre etude 
+
+# FILTER BY WinnindCampaignName & WinningEventType
+print("####### df_selected_filtered")
+df_selected_filtered_0 = (df_selected.filter((col("WinningCampaignName") == "L-Fte des mres Programmatique PBU-03052018") 
+df_selected_filtered = (df_selected_filtered_0.)filter((col("WinningEventType") == "impression")
+    # TO DO : ajouter filtre sur France
+df_selected_filtered.show()
+
+######## 2. Préparation Table globale avec liste des évènements
+
+### A. CALCUL DU KPI 'session engaged'
+
+rdd_selected = df_selected_filtered.rdd.map(lambda row : (row[0], row[1], ..., get_engaged_action(row[X])))
+#df_test
+
+#### B. Conversion de la StartVisitTime pour pouvoir l'exploiter
+
+# date_converted = datetime.datetime.fromtimestamp(test)
+
+df_sessions_0 = df_selected_filtered.groupBy(['cookie_ID_ga', 'concat_visitId_fullVisitor', 'bounce', 'channel', 'pv']).agg(F.sum('sessions').alias('nb_sessions'))
+
+
+### C. GROUP BY granularité / session -> session-id
+#Data.groupby(ga_id, session_id, datetime, channel).agg(F.sum(sessions))
+
+# Sort by datetime :
+# Quelle méthode entre groupby + orderby OU sortWithinPartition ?
+
+### D. GROUP BY granularité client -> ga-id
+# Data.groupby([ga_id]).agg(F.collect_list(« session_id »).alias(« liste_sessionID »),  F.collect_list(« channel »).alias(« liste_channel »))
+
+### E. PAssage en RDD
+#rdd = data.rdd
+
+### F. Arbre de décision
+
+#rdd.map(lambda row : (row[0], get_attribution(row[1])))
+
+#def get_attribution(liste):
+
+#    if liste[0] == "display":
+#        channel_associe = display
+
+#    return channel_associe
+
+# Social -> Attribution à Social
+# Display -> Attribution à Display
+# SEA -> before last ? -> Display -> Attribution à Display
+#                                     -> Autre -> Attribution à SEA
+# SEO -> before last ? -> Display -> Attribution à Display
+#                                     -> Autre -> Attribution à SE0
+# Direct -> before last ? -> Display -> Attribution à Display
+#                                     -> Autre -> Attribution à Direct
